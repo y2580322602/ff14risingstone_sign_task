@@ -30,20 +30,17 @@ jobs:
       
       # 3. 发送 PushPlus 通知
       - name: Send PushPlus Notification
-        # 只有在推送Token存在时才运行这个步骤
-        if: success() || failure() && secrets.PUSH_PLUS_TOKEN != ''
+        # 修正：使用 always() 确保无论上一步成功或失败都执行（只要Token不为空）
+        if: always() && secrets.PUSH_PLUS_TOKEN != ''
         env:
           PUSH_PLUS_TOKEN: ${{ secrets.PUSH_PLUS_TOKEN }}
         run: |
-          # 检查上一步的日志输出是否包含成功或失败信息（如果原作者的Docker会输出）
-          # 这是一个非常简化的推送，只发送一个结果
-          
-          # 假设签到步骤（sign_in）的日志会包含“成功”或“失败”
-          # 由于我们不能直接读上一步的日志，我们发送一个固定且有用的信息：
+          # ... (其余 Python 脚本内容不变)
           
           LOG_TITLE="FF14签到任务完成"
           
           # 为了知道签到是否成功，我们需要查看上一步的退出状态
+          # job.status 是一个上下文变量，可以直接在 run: 脚本中使用
           if [[ "${{ job.status }}" == "success" ]]; then
             LOG_TITLE="✅ FF14签到任务成功完成"
             MESSAGE="今日签到已执行，任务状态正常。请查看工作流日志确认奖励领取情况。"
