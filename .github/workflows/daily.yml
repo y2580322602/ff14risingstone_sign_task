@@ -12,8 +12,58 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - uses: docker://ghcr.io/starhearthunt/ff14risingstone_sign_task:master
+      
+      # 1. 运行原版 Docker 容器，执行签到任务
+      - name: Run Sign-in Task
+        uses: docker://ghcr.io/starhearthunt/ff14risingstone_sign_task:master
         with:
           cookie: ${{ secrets.COOKIE }}
           user_agent: ${{ secrets.USER_AGENT }}
+        id: sign_in # 给这个步骤一个 ID，方便后续引用它的输出
+      
+      # 2. 准备 Python 环境，用于发送推送
+      - name: Set up Python for PushPlus
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x' 
+      - run: pip install requests # 安装发送请求的库
+      
+      # 3. 发送 PushPlus 通知
+      - name: Send PushPlus Notification
+        # 只有在推送Token存在时才运行这个步骤
+        if: success() || failure() && secrets.PUSH_PLUS_TOKEN != ''
+        env:
+          PUSH_PLUS_TOKEN: ${{ secrets.PUSH_PLUS_TOKEN }}
+        run: |
+          # 检查上一步的日志输出是否包含成功或失败信息（如果原作者的Docker会输出）
+          # 这是一个非常简化的推送，只发送一个结果
+          
+          # 假设签到步骤（sign_in）的日志会包含“成功”或“失败”
+          # 由于我们不能直接读上一步的日志，我们发送一个固定且有用的信息：
+          
+          LOG_TITLE="FF14签到任务完成"
+          
+          # 为了知道签到是否成功，我们需要查看上一步的退出状态
+          if [[ "${{ job.status }}" == "success" ]]; then
+            LOG_TITLE="✅ FF14签到任务成功完成"
+            MESSAGE="今日签到已执行，任务状态正常。请查看工作流日志确认奖励领取情况。"
+          else
+            LOG_TITLE="❌ FF14签到任务失败或Cookie已过期"
+            MESSAGE="签到工作流运行失败！请检查 GitHub Actions 日志和你的 Cookie 是否过期。"
+          fi
+
+          # Python 命令发送推送
+          python - <<EOF
+          import requests
+          import os
+          
+          token = os.environ.get('PUSH_PLUS_TOKEN')
+          url = 'http://www.pushplus.plus/send'
+          data = {
+              "token": token,
+              "title": "$LOG_TITLE",
+              "content": "$MESSAGE",
+              "template": "html"
+          }
+          requests.post(url, json=data)
+          EOF
