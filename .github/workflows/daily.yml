@@ -30,16 +30,18 @@ jobs:
       
       # 3. 发送 PushPlus 通知
       - name: Send PushPlus Notification
-        # 修正：使用 always() 确保无论上一步成功或失败都执行（只要Token不为空）
-        if: always() && secrets.PUSH_PLUS_TOKEN != ''
+        if: always() # 仅使用 always() 确保无论前一步成功或失败都执行
         env:
           PUSH_PLUS_TOKEN: ${{ secrets.PUSH_PLUS_TOKEN }}
         run: |
-          # ... (其余 Python 脚本内容不变)
+          # **【关键修正】**：在 Shell 脚本中检查 Token 是否存在
+          if [ -z "$PUSH_PLUS_TOKEN" ]; then
+            echo "未配置 PUSH_PLUS_TOKEN，跳过推送。"
+            exit 0
+          fi
           
           LOG_TITLE="FF14签到任务完成"
           
-          # 为了知道签到是否成功，我们需要查看上一步的退出状态
           # job.status 是一个上下文变量，可以直接在 run: 脚本中使用
           if [[ "${{ job.status }}" == "success" ]]; then
             LOG_TITLE="✅ FF14签到任务成功完成"
@@ -62,5 +64,9 @@ jobs:
               "content": "$MESSAGE",
               "template": "html"
           }
-          requests.post(url, json=data)
+          try:
+              requests.post(url, json=data)
+              print("PushPlus 推送成功发送。")
+          except Exception as e:
+              print(f"PushPlus 推送失败: {e}")
           EOF
